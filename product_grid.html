@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Store</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 0 1rem 4rem;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .shop-header {
+      padding: 2.5rem 0 1.5rem;
+      border-bottom: 1px solid #e2e0d8;
+      margin-bottom: 2rem;
+    }
+    .shop-title { font-size: 28px; font-weight: 600; color: #1a1a1a; }
+    .shop-subtitle { font-size: 14px; color: #888; margin-top: 4px; }
+
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-btn {
+      font-size: 13px;
+      padding: 6px 16px;
+      border-radius: 99px;
+      border: 1px solid #d0cec6;
+      background: transparent;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { background: #eee; color: #1a1a1a; }
+    .filter-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+    .count { font-size: 13px; color: #999; margin-bottom: 1.5rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e0d8;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .card:hover { border-color: #aaa; transform: translateY(-2px); }
+
+    .card-img {
+      width: 100%;
+      aspect-ratio: 1;
+      background: #f0ede6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+    }
+    .card-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-body { padding: 12px 14px 14px; }
+    .card-category { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .card-name { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 10px; line-height: 1.4; }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .card-price { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+    .card-badge {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      background: #e6f5ee;
+      color: #2a7a4f;
+    }
+    .card-badge.sold-out { background: #f0ede6; color: #999; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="shop-header">
+      <div class="shop-title">My Store</div>
+      <div class="shop-subtitle">Browse our collection</div>
+    </div>
+
+    <div class="filter-bar" id="filters"></div>
+    <div class="count" id="count"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script>
+    const products = [
+      { name: "Pink Cake",            category: "Food",        price: 24.99, image: "https://images.unsplash.com/photo-1464349095431-e9a21285b5f3?w=400&q=80", badge: "In stock" },
+      { name: "Linen Tote Bag",       category: "Accessories", price: 38.00, image: "https://images.unsplash.com/photo-1591561954557-26941169b49e?w=400&q=80", badge: "In stock" },
+      { name: "Scented Candle",       category: "Home",        price: 19.50, image: "https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=400&q=80", badge: "In stock" },
+      { name: "Wooden Cutting Board", category: "Kitchen",     price: 54.00, image: "https://images.unsplash.com/photo-1605522561233-768ad7a8fabf?w=400&q=80", badge: "In stock" },
+      { name: "Knit Throw Blanket",   category: "Home",        price: 79.00, image: "https://images.unsplash.com/photo-1580301762395-21ce84d00bc6?w=400&q=80", badge: "Sold out", soldOut: true },
+      { name: "Leather Wallet",       category: "Accessories", price: 45.00, image: "https://images.unsplash.com/photo-1627123424574-724758594e93?w=400&q=80", badge: "In stock" },
+      { name: "Glass Water Bottle",   category: "Kitchen",     price: 29.99, image: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?w=400&q=80", badge: "In stock" },
+      { name: "Incense Set",          category: "Home",        price: 15.00, image: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400&q=80", badge: "In stock" },
+    ];
+
+    let active = "All";
+    const cats = ["All", ...new Set(products.map(p => p.category))];
+
+    const filtersEl = document.getElementById("filters");
+    const gridEl    = document.getElementById("grid");
+    const countEl   = document.getElementById("count");
+
+    function render() {
+      const filtered = active === "All" ? products : products.filter(p => p.category === active);
+      countEl.textContent = filtered.length + " product" + (filtered.length !== 1 ? "s" : "");
+      gridEl.innerHTML = filtered.map(p => `
+        <div class="card">
+          <div class="card-img"><img src="${p.image}" alt="${p.name}" loading="lazy" /></div>
+          <div class="card-body">
+            <div class="card-category">${p.category}</div>
+            <div class="card-name">${p.name}</div>
+            <div class="card-footer">
+              <div class="card-price">$${p.price.toFixed(2)}</div>
+              <div class="card-badge${p.soldOut ? " sold-out" : ""}">${p.badge}</div>
+            </div>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    filtersEl.innerHTML = cats.map(c =>
+      `<button class="filter-btn${c === active ? " active" : ""}" data-cat="${c}">${c}</button>`
+    ).join("");
+
+    filtersEl.addEventListener("click", e => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      active = btn.dataset.cat;
+      document.querySelectorAll(".filter-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.cat === active)
+      );
+      render();
+    });
+
+    render();
+  </script>
+</body>
+</html>

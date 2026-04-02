@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>My Store</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f5f5f3;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 0 1rem 4rem;
+    }
+
+    .container { max-width: 1100px; margin: 0 auto; }
+
+    .shop-header {
+      padding: 2.5rem 0 1.5rem;
+      border-bottom: 1px solid #e2e0d8;
+      margin-bottom: 2rem;
+    }
+    .shop-title { font-size: 28px; font-weight: 600; color: #1a1a1a; }
+    .shop-subtitle { font-size: 14px; color: #888; margin-top: 4px; }
+
+    .filter-bar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+    .filter-btn {
+      font-size: 13px;
+      padding: 6px 16px;
+      border-radius: 99px;
+      border: 1px solid #d0cec6;
+      background: transparent;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover { background: #eee; color: #1a1a1a; }
+    .filter-btn.active { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+
+    .count { font-size: 13px; color: #999; margin-bottom: 1.5rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 16px;
+    }
+
+    .card {
+      background: #fff;
+      border: 1px solid #e2e0d8;
+      border-radius: 12px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.15s, transform 0.15s;
+    }
+    .card:hover { border-color: #aaa; transform: translateY(-2px); }
+
+    .card-img {
+      width: 100%;
+      aspect-ratio: 1;
+      background: #f0ede6;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 52px;
+    }
+    .card-img img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .card-body { padding: 12px 14px 14px; }
+    .card-category { font-size: 11px; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+    .card-name { font-size: 14px; font-weight: 500; color: #1a1a1a; margin-bottom: 6px; line-height: 1.4; }
+    .card-desc { font-size: 12px; color: #888; margin-bottom: 10px; line-height: 1.5; }
+    .card-footer { display: flex; align-items: center; justify-content: space-between; }
+    .card-price { font-size: 16px; font-weight: 600; color: #1a1a1a; }
+    .card-badge {
+      font-size: 11px;
+      padding: 3px 9px;
+      border-radius: 99px;
+      background: #e6f5ee;
+      color: #2a7a4f;
+    }
+    .card-badge.sold-out { background: #f0ede6; color: #999; }
+
+    /* Loading & error states */
+    .state-msg {
+      grid-column: 1 / -1;
+      text-align: center;
+      padding: 3rem 1rem;
+      color: #999;
+      font-size: 14px;
+    }
+    .state-msg .spinner {
+      display: inline-block;
+      width: 20px; height: 20px;
+      border: 2px solid #d0cec6;
+      border-top-color: #1a1a1a;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin-bottom: 10px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="shop-header">
+      <div class="shop-title">My Store</div>
+      <div class="shop-subtitle">Browse our collection</div>
+    </div>
+
+    <div class="filter-bar" id="filters"></div>
+    <div class="count" id="count"></div>
+    <div class="grid" id="grid">
+      <div class="state-msg"><div class="spinner"></div><br>Loading products…</div>
+    </div>
+  </div>
+
+  <script>
+    const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSeK6Ym8BkKroi1h3PDvQi_-E3ebCM-KkwxiwApVvZaxz32mAqmPcx-xA5zdRMvI7WRj9rVDa3ccRFd/pub?output=csv";
+
+    let products = [];
+    let active = "All";
+
+    const filtersEl = document.getElementById("filters");
+    const gridEl    = document.getElementById("grid");
+    const countEl   = document.getElementById("count");
+
+    /* ── CSV parser (handles quoted fields with commas/newlines) ── */
+    function parseCSV(text) {
+      const rows = [];
+      let row = [], field = "", inQuotes = false;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i], next = text[i + 1];
+        if (inQuotes) {
+          if (ch === '"' && next === '"') { field += '"'; i++; }
+          else if (ch === '"') { inQuotes = false; }
+          else { field += ch; }
+        } else {
+          if (ch === '"') { inQuotes = true; }
+          else if (ch === ',') { row.push(field.trim()); field = ""; }
+          else if (ch === '\n' || (ch === '\r' && next === '\n')) {
+            row.push(field.trim()); field = "";
+            if (row.some(Boolean)) rows.push(row);
+            row = [];
+            if (ch === '\r') i++;
+          } else { field += ch; }
+        }
+      }
+      if (field || row.length) { row.push(field.trim()); if (row.some(Boolean)) rows.push(row); }
+      return rows;
+    }
+
+    function csvToObjects(rows) {
+      if (rows.length < 2) return [];
+      // Normalise header names: lowercase, trim
+      const headers = rows[0].map(h => h.toLowerCase().trim());
+      return rows.slice(1).map(cells => {
+        const obj = {};
+        headers.forEach((h, i) => { obj[h] = (cells[i] ?? "").trim(); });
+        return obj;
+      });
+    }
+
+    /* ── Render ── */
+    function buildFilters() {
+      const cats = ["All", ...new Set(products.map(p => p.category))];
+      filtersEl.innerHTML = cats.map(c =>
+        `<button class="filter-btn${c === active ? " active" : ""}" data-cat="${c}">${c}</button>`
+      ).join("");
+    }
+
+    function render() {
+      const filtered = active === "All" ? products : products.filter(p => p.category === active);
+      countEl.textContent = filtered.length + " product" + (filtered.length !== 1 ? "s" : "");
+
+      if (!filtered.length) {
+        gridEl.innerHTML = `<div class="state-msg">No products found.</div>`;
+        return;
+      }
+
+      gridEl.innerHTML = filtered.map(p => {
+        const price = parseFloat(p.price);
+        const formattedPrice = isNaN(price) ? p.price : "$" + price.toFixed(2);
+        const badgeClass = (p.badge || "").toLowerCase().replace(/\s+/g, "-") === "sold-out" ? " sold-out" : "";
+        const imgHtml = p.image
+          ? `<img src="${escHtml(p.image)}" alt="${escHtml(p.name)}" loading="lazy" />`
+          : "🛍️";
+        return `
+          <div class="card">
+            <div class="card-img">${imgHtml}</div>
+            <div class="card-body">
+              <div class="card-category">${escHtml(p.category)}</div>
+              <div class="card-name">${escHtml(p.name)}</div>
+              ${p.desc ? `<div class="card-desc">${escHtml(p.desc)}</div>` : ""}
+              <div class="card-footer">
+                <div class="card-price">${escHtml(formattedPrice)}</div>
+                ${p.badge ? `<div class="card-badge${badgeClass}">${escHtml(p.badge)}</div>` : ""}
+              </div>
+            </div>
+          </div>`;
+      }).join("");
+    }
+
+    function escHtml(str) {
+      return String(str ?? "")
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+
+    /* ── Filter clicks ── */
+    filtersEl.addEventListener("click", e => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+      active = btn.dataset.cat;
+      document.querySelectorAll(".filter-btn").forEach(b =>
+        b.classList.toggle("active", b.dataset.cat === active)
+      );
+      render();
+    });
+
+    /* ── Fetch & init ── */
+    async function loadProducts() {
+      try {
+        const res = await fetch(SHEET_CSV_URL);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const text = await res.text();
+        const rows = parseCSV(text);
+        const raw  = csvToObjects(rows);
+
+        // Map flexible column names → expected keys
+        products = raw.map(r => ({
+          name:     r.name     || r.product    || "",
+          category: r.category || r.cat        || "",
+          desc:     r.desc     || r.description|| "",
+          price:    r.price    || "",
+          image:    r.image    || r.img        || r.photo || "",
+          badge:    r.badge    || r.status     || "",
+        })).filter(p => p.name);
+
+        buildFilters();
+        render();
+      } catch (err) {
+        gridEl.innerHTML = `<div class="state-msg">⚠️ Could not load products.<br><small>${err.message}</small></div>`;
+        countEl.textContent = "";
+        console.error("Sheet load error:", err);
+      }
+    }
+
+    loadProducts();
+  </script>
+</body>
+</html>
